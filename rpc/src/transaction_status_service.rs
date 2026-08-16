@@ -207,20 +207,18 @@ impl TransactionStatusService {
 
                     if let Some(transaction_notifier) = transaction_notifier.as_ref() {
                         let is_vote = transaction.is_simple_vote_transaction();
-                        if !is_vote {
-                            let message_hash = transaction.message_hash();
-                            let signature = transaction.signature();
-                            let transaction = transaction.to_versioned_transaction();
-                            transaction_notifier.notify_transaction(
-                                slot,
-                                transaction_index,
-                                signature,
-                                message_hash,
-                                is_vote,
-                                &transaction_status_meta,
-                                &transaction,
-                            );
-                        }
+                        let message_hash = transaction.message_hash();
+                        let signature = transaction.signature();
+                        let transaction = transaction.to_versioned_transaction();
+                        transaction_notifier.notify_transaction(
+                            slot,
+                            transaction_index,
+                            signature,
+                            message_hash,
+                            is_vote,
+                            &transaction_status_meta,
+                            &transaction,
+                        );
                     }
 
                     if !(enable_extended_tx_metadata_storage || transaction_notifier.is_some()) {

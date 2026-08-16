@@ -160,6 +160,7 @@ fn collect_accounts_for_failed_tx<'a>(
 mod tests {
     use {
         super::*,
+        rustc_hash::FxHashMap,
         solana_account::{AccountSharedData, ReadableAccount},
         solana_fee_structure::FeeDetails,
         solana_hash::Hash,
@@ -183,7 +184,7 @@ mod tests {
         solana_system_interface::{instruction as system_instruction, program as system_program},
         solana_transaction::{Transaction, sanitized::SanitizedTransaction},
         solana_transaction_error::{TransactionError, TransactionResult as Result},
-        std::collections::{HashMap, HashSet},
+        std::collections::HashSet,
     };
 
     /// Builds touched flags for `num_total` accounts with the first
@@ -223,7 +224,7 @@ mod tests {
                     accounts_deltas,
                 },
                 loaded_transaction,
-                programs_modified_by_tx: HashMap::new(),
+                programs_modified_by_tx: FxHashMap::default(),
             },
         )))
     }

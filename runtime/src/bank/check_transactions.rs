@@ -237,9 +237,10 @@ impl Bank {
         strict_nonce_authority_check: bool,
     ) -> TransactionResult<Option<Pubkey>> {
         let recent_blockhash = tx.recent_blockhash();
-        if hash_queue
-            .get_hash_info_if_valid(recent_blockhash, max_age)
-            .is_some()
+        if max_age == usize::MAX
+            || hash_queue
+                .get_hash_info_if_valid(recent_blockhash, max_age)
+                .is_some()
         {
             Ok(None)
         } else if let Some((nonce_address, _)) = self.check_nonce_transaction_validity(

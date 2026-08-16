@@ -35,6 +35,9 @@ impl TransactionNotifier for TransactionNotifierImpl {
         transaction_status_meta: &TransactionStatusMeta,
         transaction: &VersionedTransaction,
     ) {
+        // if is_vote {
+        //     return;
+        // }
         let transaction_log_info = Self::build_replica_transaction_info(
             index,
             signature,

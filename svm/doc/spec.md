@@ -180,9 +180,6 @@ the runtime environment to use for processing transactions.
 Consumers can provide various configurations to adjust the default behavior of
 the transaction processor.
 
-- `account_overrides`: Encapsulates overridden accounts, typically used for
-  transaction simulation.
-- `compute_budget`: The compute budget to use for transaction execution.
 - `check_program_deployment_slot`: Whether or not to check a program's
   deployment slot when replenishing a program cache instance.
 - `log_messages_bytes_limit`: The maximum number of bytes that log messages can

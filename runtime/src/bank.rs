@@ -112,7 +112,7 @@ use {
     },
     solana_builtins::{BUILTINS, STATELESS_BUILTINS},
     solana_clock::{
-        BankId, Epoch, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+        BankId, Epoch, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
         Slot, SlotIndex, UnixTimestamp,
     },
     solana_cluster_type::ClusterType,
@@ -132,7 +132,7 @@ use {
     solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{measure::Measure, measure_time, measure_us},
     solana_message::{
-        AccountKeys, SanitizedMessage, VersionedMessage, inner_instruction::InnerInstructions,
+        SanitizedMessage, VersionedMessage, inner_instruction::InnerInstructions,
     },
     solana_packet::PACKET_DATA_SIZE,
     solana_precompile_error::PrecompileError,
@@ -153,7 +153,7 @@ use {
     solana_sha256_hasher::hashv,
     solana_signature::Signature,
     solana_slot_hashes::SlotHashes,
-    solana_slot_history::{Check, SlotHistory},
+    solana_slot_history::SlotHistory,
     solana_stake_interface::{
         stake_history::{SIZE as STAKE_HISTORY_ACCOUNT_SIZE, StakeHistory},
         state::Delegation,
@@ -161,7 +161,6 @@ use {
     },
     solana_svm::{
         account_loader::LoadedTransaction,
-        account_overrides::AccountOverrides,
         transaction_balances::{BalanceCollector, SvmTokenInfo},
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
         transaction_error_metrics::TransactionErrorMetrics,
@@ -3801,7 +3800,6 @@ impl Bank {
     ) -> TransactionSimulationResult {
         let account_keys = transaction.account_keys();
         let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
         let batch = self.prepare_unlocked_batch_from_single_tx(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -3811,22 +3809,17 @@ impl Bank {
             ..
         } = self.load_and_execute_transactions(
             &batch,
-            // After simulation, transactions will need to be forwarded to the leader
-            // for processing. During forwarding, the transaction could expire if the
-            // delay is not accounted for.
-            self.max_processing_age()
-                .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY),
+            usize::MAX,
             &mut timings,
             &mut TransactionErrorMetrics::default(),
             TransactionProcessingConfig {
-                account_overrides: Some(&account_overrides),
                 check_program_deployment_slot: self.check_program_deployment_slot,
                 log_messages_bytes_limit: None,
                 limit_to_load_programs: true,
                 recording_config: ExecutionRecordingConfig {
                     enable_cpi_recording,
                     enable_log_recording: true,
-                    enable_return_data_recording: true,
+                    enable_return_data_recording: false,
                     enable_transaction_balance_recording: true,
                 },
                 drop_on_failure: false,
@@ -3920,27 +3913,6 @@ impl Bank {
             pre_token_balances,
             post_token_balances,
         }
-    }
-
-    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
-        let mut account_overrides = AccountOverrides::default();
-        let slot_history_id = sysvar::slot_history::id();
-        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
-            let current_account = self.get_account_with_fixed_root(&slot_history_id);
-            let slot_history = current_account
-                .as_ref()
-                .map(|account| wincode::deserialize::<SlotHistory>(account.data()).unwrap())
-                .unwrap_or_default();
-            if slot_history.check(self.slot()) == Check::Found {
-                let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
-                if let Some((account, _)) =
-                    self.load_slow_with_fixed_root(&ancestors, &slot_history_id)
-                {
-                    account_overrides.set_slot_history(Some(account));
-                }
-            }
-        }
-        account_overrides
     }
 
     pub fn unlock_accounts<'a, Tx: SVMMessage + 'a>(
@@ -4560,7 +4532,6 @@ impl Bank {
             timings,
             &mut TransactionErrorMetrics::default(),
             TransactionProcessingConfig {
-                account_overrides: None,
                 check_program_deployment_slot: self.check_program_deployment_slot,
                 log_messages_bytes_limit,
                 limit_to_load_programs: false,

@@ -115,16 +115,16 @@ pub type AccountsMap = HashMap<Pubkey, AccountSharedData>;
 // container for everything needed to execute a test entry
 // care should be taken if reused, because we update bank account states, but otherwise leave it as-is
 // the environment is made available for tests that check it after processing
-pub struct SvmTestEnvironment<'a> {
+pub struct SvmTestEnvironment {
     pub mock_bank: MockBankCallback,
     pub fork_graph: Arc<RwLock<MockForkGraph>>,
     pub batch_processor: TransactionBatchProcessor<MockForkGraph>,
-    pub processing_config: TransactionProcessingConfig<'a>,
+    pub processing_config: TransactionProcessingConfig,
     pub processing_environment: TransactionProcessingEnvironment,
     pub test_entry: SvmTestEntry,
 }
 
-impl SvmTestEnvironment<'_> {
+impl SvmTestEnvironment {
     pub fn create(test_entry: SvmTestEntry) -> Self {
         let mock_bank = MockBankCallback::default();
 

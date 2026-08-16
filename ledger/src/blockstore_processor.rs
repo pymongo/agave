@@ -11,7 +11,7 @@ use {
     ExecuteTimingType::{NumExecuteBatches, TotalBatchesLen},
     agave_votor_messages::{consensus_message::ConsensusMessage, migration::MigrationStatus},
     chrono_humanize::{Accuracy, HumanTime, Tense},
-    crossbeam_channel::{Receiver, Sender},
+    crossbeam_channel::{Receiver, Sender, TrySendError},
     itertools::Itertools,
     log::*,
     rayon::{ThreadPool, prelude::*},
@@ -2835,7 +2835,7 @@ impl TransactionStatusSender {
             .as_ref()
             .map(|dependency_tracker| dependency_tracker.declare_work());
 
-        if let Err(e) = self.sender.send(TransactionStatusMessage::Batch((
+        let message = TransactionStatusMessage::Batch((
             TransactionStatusBatch {
                 slot,
                 transactions,
@@ -2846,18 +2846,56 @@ impl TransactionStatusSender {
                 transaction_indexes,
             },
             work_sequence,
-        ))) {
-            trace!("Slot {slot} transaction_status send batch failed: {e:?}");
+        ));
+        if let Err(e) = self.sender.try_send(message) {
+            if let Some(work_id) = work_sequence
+                && let Some(dependency_tracker) = self.dependency_tracker.as_ref()
+            {
+                dependency_tracker.mark_this_and_all_previous_work_processed(work_id);
+            }
+            match e {
+                TrySendError::Full(_) => {
+                    datapoint_error!(
+                        "transaction-status-sender-full",
+                        ("slot", slot as i64, i64),
+                        ("queue_len", self.sender.len() as i64, i64),
+                        ("kind", "batch", String)
+                    );
+                    error!(
+                        "Slot {slot} transaction_status batch dropped, queue full (len={})",
+                        self.sender.len()
+                    );
+                }
+                TrySendError::Disconnected(_) => {
+                    trace!("Slot {slot} transaction_status send batch failed: disconnected");
+                }
+            }
         }
     }
 
     pub fn send_transaction_status_freeze_message(&self, bank: &Arc<Bank>) {
+        let slot = bank.slot();
         if let Err(e) = self
             .sender
-            .send(TransactionStatusMessage::Freeze(bank.clone()))
+            .try_send(TransactionStatusMessage::Freeze(bank.clone()))
         {
-            let slot = bank.slot();
-            warn!("Slot {slot} transaction_status send freeze message failed: {e:?}");
+            match e {
+                TrySendError::Full(_) => {
+                    datapoint_error!(
+                        "transaction-status-sender-full",
+                        ("slot", slot as i64, i64),
+                        ("queue_len", self.sender.len() as i64, i64),
+                        ("kind", "freeze", String)
+                    );
+                    error!(
+                        "Slot {slot} transaction_status freeze dropped, queue full (len={})",
+                        self.sender.len()
+                    );
+                }
+                TrySendError::Disconnected(_) => {
+                    warn!("Slot {slot} transaction_status send freeze message failed: disconnected");
+                }
+            }
         }
     }
 }

@@ -6333,20 +6333,23 @@ pub mod tests {
             "result": {
                 "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
-                    "err":"BlockhashNotFound",
+                    "err":null,
                     "accounts":null,
                     "innerInstructions":null,
-                    "loadedAccountsDataSize":0,
-                    "fee": null,
+                    "loadedAccountsDataSize": loaded_accounts_data_size,
+                    "fee": 5000,
                     "loadedAddresses": {"readonly": [], "writable": []},
                     "preBalances": [1000000000, 0, 1],
-                    "postBalances": [1000000000, 0, 1],
+                    "postBalances": [999982200, 12800, 1],
                     "preTokenBalances": [],
                     "postTokenBalances": [],
-                    "logs":[],
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
                     "replacementBlockhash": null,
                     "returnData": null,
-                    "unitsConsumed":0,
+                    "unitsConsumed":150,
                 }
             },
             "id":1
@@ -6982,18 +6985,19 @@ pub mod tests {
             Hash::default(),
         );
 
-        // sendTransaction will fail because the blockhash is invalid
+        // Invalid blockhash is allowed in simulation/preflight; transaction is still accepted.
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
             bs58::encode(wincode::serialize(&bad_transaction).unwrap()).into_string()
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        assert_eq!(
-            res,
-            Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","fee":null,"innerInstructions":null,"loadedAccountsDataSize":0,"loadedAddresses":null,"logs":[],"postBalances":null,"postTokenBalances":null,"preBalances":null,"preTokenBalances":null,"replacementBlockhash":null,"returnData":null,"unitsConsumed":0}},"id":1}"#.to_string(),
-            )
-        );
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": format!("{}", bad_transaction.signatures[0]),
+            "id": 1,
+        });
+        let expected: String = serde_json::to_string(&expected).unwrap();
+        assert_eq!(res, Some(expected));
 
         // sendTransaction will fail due to insanity
         bad_transaction.message.instructions[0].program_id_index = 0u8;

@@ -4,8 +4,9 @@ use {
     solana_program_runtime::program_cache_entry::ProgramCacheEntry,
     solana_pubkey::Pubkey,
     solana_transaction_context::transaction::TransactionReturnData,
+    rustc_hash::FxHashMap,
     solana_transaction_error::TransactionResult,
-    std::{collections::HashMap, sync::Arc},
+    std::sync::Arc,
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -18,7 +19,7 @@ pub struct TransactionLoadedAccountsStats {
 pub struct ExecutedTransaction {
     pub loaded_transaction: LoadedTransaction,
     pub execution_details: TransactionExecutionDetails,
-    pub programs_modified_by_tx: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+    pub programs_modified_by_tx: FxHashMap<Pubkey, Arc<ProgramCacheEntry>>,
 }
 
 impl ExecutedTransaction {

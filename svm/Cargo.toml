@@ -73,6 +73,7 @@ percentage = { workspace = true }
 prost = { version = "0.11", optional = true }
 protosol = { workspace = true, optional = true }
 qualifier_attr = { workspace = true, optional = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 solana-account = { workspace = true }
 solana-bpf-loader-program = { workspace = true, optional = true }

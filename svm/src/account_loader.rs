@@ -2,7 +2,6 @@
 use qualifier_attr::{field_qualifiers, qualifiers};
 use {
     crate::{
-        account_overrides::AccountOverrides,
         rent_calculator::{RENT_EXEMPT_RENT_EPOCH, check_static_account_rent_state_transition},
         rollback_accounts::RollbackAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -25,7 +24,7 @@ use {
     solana_rent::Rent,
     solana_sdk_ids::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, loader_v4, native_loader,
-        sysvar::{self, slot_history},
+        sysvar,
     },
     solana_svm_callback::{AccountState, TransactionProcessingCallback},
     solana_svm_feature_set::SVMFeatureSet,
@@ -176,23 +175,12 @@ impl<'a, CB: TransactionProcessingCallback> AccountLoader<'a, CB> {
     // create a new AccountLoader for the transaction batch
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     pub(crate) fn new_with_loaded_accounts_capacity(
-        account_overrides: Option<&'a AccountOverrides>,
         callbacks: &'a CB,
         feature_set: &'a SVMFeatureSet,
         capacity: usize,
     ) -> AccountLoader<'a, CB> {
-        let mut loaded_accounts = AHashMap::with_capacity(capacity);
-
-        // SlotHistory may be overridden for simulation.
-        // No other uses of AccountOverrides are expected.
-        if let Some(slot_history) =
-            account_overrides.and_then(|overrides| overrides.get(&slot_history::id()))
-        {
-            loaded_accounts.insert(slot_history::id(), (slot_history.clone(), 0));
-        }
-
         Self {
-            loaded_accounts,
+            loaded_accounts: AHashMap::with_capacity(capacity),
             callbacks,
             feature_set,
         }
@@ -763,7 +751,6 @@ mod tests {
     impl<'a> From<&'a TestCallbacks> for AccountLoader<'a, TestCallbacks> {
         fn from(callbacks: &'a TestCallbacks) -> AccountLoader<'a, TestCallbacks> {
             AccountLoader::new_with_loaded_accounts_capacity(
-                None,
                 callbacks,
                 &callbacks.feature_set,
                 0,
@@ -1105,7 +1092,6 @@ mod tests {
     fn load_accounts_no_store(
         accounts: &[KeyedAccountSharedData],
         tx: Transaction,
-        account_overrides: Option<&AccountOverrides>,
     ) -> TransactionLoadResult {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
 
@@ -1120,7 +1106,6 @@ mod tests {
         };
         let feature_set = SVMFeatureSet::all_enabled();
         let mut account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-            account_overrides,
             &callbacks,
             &feature_set,
             0,
@@ -1148,7 +1133,7 @@ mod tests {
             instructions,
         );
 
-        let load_results = load_accounts_no_store(&[], tx, None);
+        let load_results = load_accounts_no_store(&[], tx);
         assert!(matches!(
             load_results,
             TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
@@ -1156,50 +1141,6 @@ mod tests {
                 ..
             }),
         ));
-    }
-
-    #[test]
-    fn test_overrides() {
-        setup_test_logger();
-        let mut account_overrides = AccountOverrides::default();
-        let slot_history_id = sysvar::slot_history::id();
-        let account = AccountSharedData::new(42, 0, &Pubkey::default());
-        account_overrides.set_slot_history(Some(account));
-
-        let keypair = Keypair::new();
-        let account = AccountSharedData::new(1_000_000, 0, &Pubkey::default());
-
-        let mut program_account = AccountSharedData::default();
-        program_account.set_lamports(1);
-        program_account.set_executable(true);
-        program_account.set_owner(native_loader::id());
-
-        let instructions = vec![CompiledInstruction::new(2, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[slot_history_id],
-            Hash::default(),
-            vec![bpf_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts_no_store(
-            &[
-                (keypair.pubkey(), account),
-                (bpf_loader::id(), program_account),
-            ],
-            tx,
-            Some(&account_overrides),
-        );
-        match &loaded_accounts {
-            TransactionLoadResult::Loaded(loaded_transaction) => {
-                assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
-                assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
-                assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
-            }
-            TransactionLoadResult::FeesOnly(fees_only_tx) => panic!("{}", fees_only_tx.load_error),
-            TransactionLoadResult::NotLoaded(e) => panic!("{e}"),
-        }
     }
 
     #[test]

@@ -219,9 +219,10 @@ impl Bank {
         strict_nonce_size_check: bool,
     ) -> TransactionCheckResult {
         let recent_blockhash = tx.recent_blockhash();
-        if hash_queue
-            .get_hash_info_if_valid(recent_blockhash, max_age)
-            .is_some()
+        if max_age == usize::MAX
+            || hash_queue
+                .get_hash_info_if_valid(recent_blockhash, max_age)
+                .is_some()
         {
             Ok(CheckedTransactionDetails::new(None, compute_budget))
         } else if let Some((nonce_address, _)) =

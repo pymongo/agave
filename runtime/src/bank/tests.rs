@@ -263,7 +263,7 @@ fn new_executed_processing_result(
                 executed_units: 0,
                 accounts_deltas,
             },
-            programs_modified_by_tx: HashMap::new(),
+            programs_modified_by_tx: rustc_hash::FxHashMap::default(),
         },
     )))
 }

@@ -38,6 +38,7 @@ log = { workspace = true }
 percentage = { workspace = true }
 qualifier_attr = { workspace = true, optional = true }
 rand = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 solana-account = { workspace = true, features = ["bincode"] }
 solana-account-info = { workspace = true }

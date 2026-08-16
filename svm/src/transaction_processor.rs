@@ -5,7 +5,6 @@ use {
             TransactionLoadResult, ValidatedTransactionDetails, load_transaction,
             update_rent_exempt_status_for_account, validate_fee_payer,
         },
-        account_overrides::AccountOverrides,
         message_processor::process_message,
         nonce_info::NonceInfo,
         program_loader::{filter_executable_program_accounts, load_program_with_pubkey},
@@ -58,12 +57,12 @@ use {
     solana_svm_log_collector::LogCollector,
     solana_svm_measure::{measure::Measure, measure_us},
     solana_svm_timings::{ExecuteTimingType, ExecuteTimings},
+    rustc_hash::FxHashSet,
     solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_svm_type_overrides::sync::{Arc, RwLock, RwLockReadGuard},
     solana_transaction_context::transaction::{ExecutionRecord, TransactionContext},
     solana_transaction_error::{TransactionError, TransactionResult},
     std::{
-        collections::HashSet,
         fmt::{Debug, Formatter},
         rc::Rc,
     },
@@ -115,10 +114,7 @@ impl ExecutionRecordingConfig {
 
 /// Configurations for processing transactions.
 #[derive(Default)]
-pub struct TransactionProcessingConfig<'a> {
-    /// Encapsulates overridden accounts, typically used for transaction
-    /// simulation.
-    pub account_overrides: Option<&'a AccountOverrides>,
+pub struct TransactionProcessingConfig {
     /// Whether or not to check a program's deployment slot when replenishing
     /// a program cache instance.
     pub check_program_deployment_slot: bool,
@@ -210,7 +206,7 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     pub program_runtime_environment: ProgramRuntimeEnvironment,
 
     /// Builtin program ids
-    pub builtin_program_ids: RwLock<HashSet<Pubkey>>,
+    pub builtin_program_ids: RwLock<FxHashSet<Pubkey>>,
 
     /// Cached ProgramCacheForTxBatch pre-populated with builtin entries.
     /// Populated once per block in `new_from()` from the global program cache,
@@ -242,7 +238,7 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
             program_runtime_environment: ProgramRuntimeEnvironment::from(
                 BuiltinProgram::new_loader(VmConfig::default()),
             ),
-            builtin_program_ids: RwLock::new(HashSet::new()),
+            builtin_program_ids: RwLock::new(FxHashSet::default()),
             builtin_program_cache: RwLock::new(ProgramCacheForTxBatch::new(Slot::default())),
             execution_cost: SVMTransactionExecutionCost::default(),
         }
@@ -428,7 +424,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         // Create the account loader, which wraps all external account fetching.
         let mut account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-            config.account_overrides,
             callbacks,
             &environment.feature_set,
             account_keys_in_batch,
@@ -1367,7 +1362,7 @@ mod tests {
         solana_transaction::sanitized::SanitizedTransaction,
         solana_transaction_context::transaction::TransactionContext,
         solana_transaction_error::TransactionError,
-        std::{borrow::Cow, collections::HashMap},
+        std::{borrow::Cow, collections::{HashMap, HashSet}},
         test_case::test_case,
     };
 
@@ -1454,7 +1449,6 @@ mod tests {
     impl<'a> From<&'a MockBankCallback> for AccountLoader<'a, MockBankCallback> {
         fn from(callbacks: &'a MockBankCallback) -> AccountLoader<'a, MockBankCallback> {
             AccountLoader::new_with_loaded_accounts_capacity(
-                None,
                 callbacks,
                 &callbacks.feature_set,
                 0,

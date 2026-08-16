@@ -9,6 +9,7 @@ use {
     },
     log::error,
     percentage::PercentageInteger,
+    rustc_hash::FxHashMap,
     solana_clock::{Epoch, Slot},
     solana_pubkey::Pubkey,
     solana_sbpf::program::BuiltinProgram,
@@ -266,9 +267,9 @@ impl<FG: ForkGraph> std::fmt::Debug for ProgramCache<FG> {
 pub struct ProgramCacheForTxBatch {
     /// Pubkey is the address of a program.
     /// ProgramCacheEntry is the corresponding program entry valid for the slot in which a transaction is being executed.
-    entries: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+    entries: FxHashMap<Pubkey, Arc<ProgramCacheEntry>>,
     /// Program entries modified during the transaction batch.
-    modified_entries: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+    modified_entries: FxHashMap<Pubkey, Arc<ProgramCacheEntry>>,
     slot: Slot,
     pub hit_max_limit: bool,
     pub loaded_missing: bool,
@@ -278,8 +279,8 @@ pub struct ProgramCacheForTxBatch {
 impl ProgramCacheForTxBatch {
     pub fn new(slot: Slot) -> Self {
         Self {
-            entries: HashMap::new(),
-            modified_entries: HashMap::new(),
+            entries: FxHashMap::default(),
+            modified_entries: FxHashMap::default(),
             slot,
             hit_max_limit: false,
             loaded_missing: false,
@@ -308,7 +309,7 @@ impl ProgramCacheForTxBatch {
 
     /// Drain the program cache's modified entries, returning the owned
     /// collection.
-    pub fn drain_modified_entries(&mut self) -> HashMap<Pubkey, Arc<ProgramCacheEntry>> {
+    pub fn drain_modified_entries(&mut self) -> FxHashMap<Pubkey, Arc<ProgramCacheEntry>> {
         std::mem::take(&mut self.modified_entries)
     }
 
@@ -344,7 +345,7 @@ impl ProgramCacheForTxBatch {
         self.slot = slot;
     }
 
-    pub fn merge(&mut self, modified_entries: &HashMap<Pubkey, Arc<ProgramCacheEntry>>) {
+    pub fn merge(&mut self, modified_entries: &FxHashMap<Pubkey, Arc<ProgramCacheEntry>>) {
         modified_entries.iter().for_each(|(key, entry)| {
             self.merged_modified = true;
             self.replenish(*key, entry.clone());
@@ -756,7 +757,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
         &mut self,
         program_runtime_environment: &ProgramRuntimeEnvironment,
         current_slot: Slot,
-        modified_entries: &HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+        modified_entries: &FxHashMap<Pubkey, Arc<ProgramCacheEntry>>,
     ) {
         modified_entries.iter().for_each(|(key, entry)| {
             self.assign_program(

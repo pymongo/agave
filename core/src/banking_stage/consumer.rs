@@ -322,7 +322,6 @@ impl Consumer {
                 &mut execute_and_commit_timings.execute_timings,
                 &mut error_counters,
                 TransactionProcessingConfig {
-                    account_overrides: None,
                     check_program_deployment_slot: bank.check_program_deployment_slot(),
                     log_messages_bytes_limit: self.log_messages_bytes_limit,
                     limit_to_load_programs: true,

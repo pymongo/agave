@@ -71,7 +71,6 @@ fn program_cache_execution(threads: usize) {
                     .collect();
                 let feature_set = SVMFeatureSet::all_enabled();
                 let account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-                    None,
                     &local_bank,
                     &feature_set,
                     0,
@@ -108,7 +107,6 @@ fn program_cache_execution(threads: usize) {
             thread::spawn(move || {
                 let feature_set = SVMFeatureSet::all_enabled();
                 let account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-                    None,
                     &local_bank,
                     &feature_set,
                     0,

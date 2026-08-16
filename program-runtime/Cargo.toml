@@ -42,6 +42,7 @@ itertools = { workspace = true }
 log = { workspace = true }
 qualifier_attr = { workspace = true, optional = true }
 rand = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 solana-account = { workspace = true }
 solana-account-info = { workspace = true }

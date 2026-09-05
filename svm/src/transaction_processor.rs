@@ -20,6 +20,7 @@ use {
         transaction_processing_result::{ProcessedTransaction, TransactionProcessingResult},
     },
     log::debug,
+    rustc_hash::FxHashSet,
     solana_account::{AccountSharedData, ReadableAccount, state_traits::StateMutWincode as _},
     solana_clock::{Epoch, Slot},
     solana_hash::Hash,
@@ -56,7 +57,6 @@ use {
     solana_svm_log_collector::LogCollector,
     solana_svm_measure::{measure::Measure, measure_us},
     solana_svm_timings::{ExecuteTimingType, ExecuteTimings},
-    rustc_hash::FxHashSet,
     solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_svm_type_overrides::sync::{Arc, RwLock, RwLockReadGuard},
     solana_transaction_context::transaction::{ExecutionRecord, TransactionContext},
@@ -1420,7 +1420,10 @@ mod tests {
         solana_transaction::sanitized::SanitizedTransaction,
         solana_transaction_context::transaction::TransactionContext,
         solana_transaction_error::TransactionError,
-        std::{borrow::Cow, collections::{HashMap, HashSet}},
+        std::{
+            borrow::Cow,
+            collections::{HashMap, HashSet},
+        },
         test_case::test_case,
     };
 
@@ -1524,11 +1527,7 @@ mod tests {
 
     impl<'a> From<&'a MockBankCallback> for AccountLoader<'a, MockBankCallback> {
         fn from(callbacks: &'a MockBankCallback) -> AccountLoader<'a, MockBankCallback> {
-            AccountLoader::new_with_loaded_accounts_capacity(
-                callbacks,
-                &callbacks.feature_set,
-                0,
-            )
+            AccountLoader::new_with_loaded_accounts_capacity(callbacks, &callbacks.feature_set, 0)
         }
     }
 

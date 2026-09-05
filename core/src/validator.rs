@@ -2936,8 +2936,8 @@ fn initialize_rpc_transaction_history_services(
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     // Bounded so TSS/geyser lag cannot hide behind an unbounded queue.
-    // 4095 batches ≈ a few seconds at hundreds of batches/s; `try_send` drops when full.
-    const TRANSACTION_STATUS_CHANNEL_CAPACITY: usize = 4096 - 1;
+    // Allow 16383 batches of burst buffering; `try_send` still drops when full.
+    const TRANSACTION_STATUS_CHANNEL_CAPACITY: usize = 16384 - 1;
     let (transaction_status_sender, transaction_status_receiver) =
         bounded(TRANSACTION_STATUS_CHANNEL_CAPACITY);
     let transaction_status_sender = Some(TransactionStatusSender {

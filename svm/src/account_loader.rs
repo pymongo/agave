@@ -21,8 +21,7 @@ use {
     solana_pubkey::Pubkey,
     solana_rent::Rent,
     solana_sdk_ids::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, loader_v4, native_loader,
-        sysvar,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, loader_v4, native_loader, sysvar,
     },
     solana_svm_callback::{AccountState, TransactionProcessingCallback},
     solana_svm_feature_set::SVMFeatureSet,
@@ -770,11 +769,7 @@ mod tests {
 
     impl<'a> From<&'a TestCallbacks> for AccountLoader<'a, TestCallbacks> {
         fn from(callbacks: &'a TestCallbacks) -> AccountLoader<'a, TestCallbacks> {
-            AccountLoader::new_with_loaded_accounts_capacity(
-                callbacks,
-                &callbacks.feature_set,
-                0,
-            )
+            AccountLoader::new_with_loaded_accounts_capacity(callbacks, &callbacks.feature_set, 0)
         }
     }
 
@@ -1127,11 +1122,8 @@ mod tests {
             ..Default::default()
         };
         let feature_set = SVMFeatureSet::all_enabled();
-        let mut account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-            &callbacks,
-            &feature_set,
-            0,
-        );
+        let mut account_loader =
+            AccountLoader::new_with_loaded_accounts_capacity(&callbacks, &feature_set, 0);
         load_transaction(
             &mut account_loader,
             &tx,

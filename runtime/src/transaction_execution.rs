@@ -311,7 +311,9 @@ impl TransactionStatusSender {
                     );
                 }
                 TrySendError::Disconnected(_) => {
-                    warn!("Slot {slot} transaction_status send freeze message failed: disconnected");
+                    warn!(
+                        "Slot {slot} transaction_status send freeze message failed: disconnected"
+                    );
                 }
             }
         }

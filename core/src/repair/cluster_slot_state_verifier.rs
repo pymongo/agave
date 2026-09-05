@@ -377,8 +377,8 @@ fn check_duplicate_confirmed_hash_against_bank_status(
             // If the cluster duplicate confirmed some version of this slot, then
             // there's another version of our dead slot
             warn!(
-                "Cluster duplicate confirmed slot {slot} with hash {duplicate_confirmed_hash}, \
-                 but we marked slot dead"
+                "fork_diagnostics event=duplicate_confirmed_dead slot={slot} \
+                 duplicate_confirmed_hash={duplicate_confirmed_hash} local_status=dead"
             );
             state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
                 duplicate_confirmed_hash,
@@ -397,8 +397,8 @@ fn check_duplicate_confirmed_hash_against_bank_status(
             // Modify fork choice rule to exclude our version from being voted
             // on and also repair the correct version
             warn!(
-                "Cluster duplicate confirmed slot {slot} with hash {duplicate_confirmed_hash}, \
-                 but our version has hash {bank_frozen_hash}"
+                "fork_diagnostics event=duplicate_confirmed_hash_mismatch slot={slot} \
+                 duplicate_confirmed_hash={duplicate_confirmed_hash} local_hash={bank_frozen_hash}"
             );
             state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
             state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
@@ -813,7 +813,16 @@ fn apply_state_changes(
                 fork_choice.mark_fork_invalid_candidate(&(slot, bank_frozen_hash));
             }
             ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash) => {
-                duplicate_slots_to_repair.insert(slot, duplicate_confirmed_hash);
+                let previous_hash =
+                    duplicate_slots_to_repair.insert(slot, duplicate_confirmed_hash);
+                if previous_hash != Some(duplicate_confirmed_hash) {
+                    // The target can also come from an EpochSlots sample.
+                    warn!(
+                        "fork_diagnostics event=repair_queued slot={slot} \
+                         target_hash={duplicate_confirmed_hash} \
+                         previous_target_hash={previous_hash:?}"
+                    );
+                }
             }
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
                 not_duplicate_confirmed_frozen_hash = None;
@@ -827,8 +836,15 @@ fn apply_state_changes(
                         new_duplicate_confirmed_slot_hashes.into_iter(),
                     )
                     .unwrap();
-                duplicate_slots_to_repair.remove(&slot);
-                purge_repair_slot_counter.remove(&slot);
+                let pending_target = duplicate_slots_to_repair.remove(&slot);
+                let repair_attempts = purge_repair_slot_counter.remove(&slot);
+                if pending_target.is_some() || repair_attempts.is_some() {
+                    warn!(
+                        "fork_diagnostics event=cluster_hash_matched slot={slot} \
+                         local_hash={bank_frozen_hash} pending_target_hash={pending_target:?} \
+                         repair_attempts={repair_attempts:?}"
+                    );
+                }
             }
             ResultingStateChange::SendAncestorHashesReplayUpdate(ancestor_hashes_replay_update) => {
                 let _ = ancestor_hashes_replay_update_sender.send(ancestor_hashes_replay_update);

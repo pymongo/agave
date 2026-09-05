@@ -710,7 +710,23 @@ impl BankForks {
         let mut prune_remove_time = Measure::start("prune_slots");
         let removed_banks = prune_slots
             .into_iter()
-            .filter_map(|slot| self.remove(slot))
+            .filter_map(|slot| {
+                // Pruning old ancestors of the new root is routine. Only warn for
+                // banks on a discarded branch, which may have emitted processed updates.
+                let is_root_ancestor = self.descendants[&slot].contains(&root);
+                let bank = self.remove(slot)?;
+                if !is_root_ancestor {
+                    warn!(
+                        "fork_diagnostics event=prune_noncanonical_bank slot={slot} bank_id={} \
+                         parent_slot={} local_hash={} frozen={} root={root}",
+                        bank.bank_id(),
+                        bank.parent_slot(),
+                        bank.hash(),
+                        bank.is_frozen(),
+                    );
+                }
+                Some(bank)
+            })
             .collect();
         prune_remove_time.stop();
 

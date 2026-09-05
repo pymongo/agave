@@ -1327,11 +1327,15 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
     }
 
     fn mark_fork_invalid_candidate(&mut self, invalid_slot_hash_key: &SlotHashKey) {
-        info!("marking fork starting at: {invalid_slot_hash_key:?} invalid candidate");
         let fork_info = self.fork_infos.get_mut(invalid_slot_hash_key);
         if let Some(fork_info) = fork_info {
             // Should not be marking duplicate confirmed blocks as invalid candidates
             assert!(!fork_info.is_duplicate_confirmed);
+            warn!(
+                "fork_diagnostics event=mark_invalid slot={} local_hash={} \
+                 latest_invalid_ancestor={:?}",
+                invalid_slot_hash_key.0, invalid_slot_hash_key.1, fork_info.latest_invalid_ancestor,
+            );
             let mut update_operations = UpdateOperations::default();
 
             // Notify all the children of this node that a parent was marked as invalid

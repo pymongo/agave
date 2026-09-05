@@ -2165,6 +2165,12 @@ impl ReplayStage {
                         );
                     }
 
+                    warn!(
+                        "fork_diagnostics event=dump_for_repair slot={duplicate_slot} \
+                         local_hash={frozen_hash:?} target_hash={correct_hash} \
+                         attempt={attempt_no} root={}",
+                        root_bank.slot(),
+                    );
                     Self::purge_unconfirmed_slot(
                         *duplicate_slot,
                         ancestors,
@@ -2301,6 +2307,16 @@ impl ReplayStage {
         };
         for bank in banks_to_remove {
             let _ = bank.wait_for_completed_scheduler();
+            warn!(
+                "fork_diagnostics event=purge_bank slot={} bank_id={} parent_slot={} \
+                 local_hash={} frozen={} purge_ancestor_slot={slot_to_purge} root={}",
+                bank.slot(),
+                bank.bank_id(),
+                bank.parent_slot(),
+                bank.hash(),
+                bank.is_frozen(),
+                root_bank.slot(),
+            );
         }
 
         // Grab the Slot and BankId's of the banks we need to purge, then clear the banks

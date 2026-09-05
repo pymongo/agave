@@ -113,8 +113,7 @@ use {
     },
     solana_builtins::{BUILTINS, STATELESS_BUILTINS},
     solana_clock::{
-        BankId, Epoch, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
-        Slot, SlotIndex, UnixTimestamp,
+        BankId, Epoch, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, Slot, SlotIndex, UnixTimestamp,
     },
     solana_cluster_type::ClusterType,
     solana_compute_budget::compute_budget::ComputeBudget,
@@ -132,9 +131,7 @@ use {
     solana_keypair::Keypair,
     solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{measure::Measure, measure_time, measure_us},
-    solana_message::{
-        SanitizedMessage, VersionedMessage, inner_instruction::InnerInstructions,
-    },
+    solana_message::{SanitizedMessage, VersionedMessage, inner_instruction::InnerInstructions},
     solana_packet::PACKET_DATA_SIZE,
     solana_precompile_error::PrecompileError,
     solana_program_runtime::{

@@ -70,11 +70,8 @@ fn program_cache_execution(threads: usize) {
                     })
                     .collect();
                 let feature_set = SVMFeatureSet::all_enabled();
-                let account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-                    &local_bank,
-                    &feature_set,
-                    0,
-                );
+                let account_loader =
+                    AccountLoader::new_with_loaded_accounts_capacity(&local_bank, &feature_set, 0);
                 let mut result = ProgramCacheForTxBatch::new(processor.slot);
                 let program_runtime_environment_for_execution =
                     processor.program_runtime_environment_for_epoch(processor.epoch);
@@ -106,11 +103,8 @@ fn program_cache_execution(threads: usize) {
             );
             thread::spawn(move || {
                 let feature_set = SVMFeatureSet::all_enabled();
-                let account_loader = AccountLoader::new_with_loaded_accounts_capacity(
-                    &local_bank,
-                    &feature_set,
-                    0,
-                );
+                let account_loader =
+                    AccountLoader::new_with_loaded_accounts_capacity(&local_bank, &feature_set, 0);
                 let upcoming_environment = processor
                     .program_runtime_environment_for_epoch(processor.epoch.saturating_add(1));
                 processor.prepare_one_program_for_upcoming_feature_set(

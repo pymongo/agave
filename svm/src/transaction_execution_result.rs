@@ -1,12 +1,9 @@
 use {
-    crate::account_loader::LoadedTransaction,
+    crate::account_loader::LoadedTransaction, rustc_hash::FxHashMap,
     solana_message::inner_instruction::InnerInstructionsList,
-    solana_program_runtime::program_cache_entry::ProgramCacheEntry,
-    solana_pubkey::Pubkey,
+    solana_program_runtime::program_cache_entry::ProgramCacheEntry, solana_pubkey::Pubkey,
     solana_transaction_context::transaction::TransactionReturnData,
-    rustc_hash::FxHashMap,
-    solana_transaction_error::TransactionResult,
-    std::sync::Arc,
+    solana_transaction_error::TransactionResult, std::sync::Arc,
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]

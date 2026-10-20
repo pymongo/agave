@@ -1401,15 +1401,15 @@ impl Validator {
             (None, None, None, None, None, None, None)
         };
 
-        // CompletedDataSetsService feeds two independent sinks: RPC signatureSubscribe
-        // notifications (which need rpc_subscriptions) and the geyser deshred-transaction notifier
-        // (which does not). Spawn it whenever either sink wants it, kept out of the rpc_addrs block
-        // above so a geyser node started without --rpc-port still gets deshred notifications.
-        // Gating on the notifier itself rather than on a plugin being loaded keeps the per-data-set
-        // blockstore reads off nodes whose plugins don't subscribe; --geyser-plugin-always-enabled
-        // is the exception, where the notifier is present with no subscribers.
+        // CompletedDataSetsService does per-data-set blockstore reads (entry deserialization and
+        // slot meta) to feed the geyser deshred-transaction notifier and RPC signatureSubscribe.
+        // It runs only when a deshred notifier is present; RPC signatureSubscribe notifications
+        // are not produced on nodes without one. This is intentional for nodes that don't use
+        // deshred or signature subscriptions, and avoids per-data-set work otherwise.
+        // --geyser-plugin-always-enabled is the exception, where the notifier is present with no
+        // subscribers.
         let (completed_data_sets_sender, completed_data_sets_service) =
-            if config.rpc_config.full_api || deshred_transaction_notifier.is_some() {
+            if deshred_transaction_notifier.is_some() {
                 let (completed_data_sets_sender, completed_data_sets_receiver) =
                     bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
                 let completed_data_sets_service = CompletedDataSetsService::new(

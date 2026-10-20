@@ -83,7 +83,6 @@ use {
         versioned::VersionedTransaction,
     },
     solana_transaction_context::transaction_accounts::KeyedAccountSharedData,
-    solana_transaction_error::TransactionError,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
         ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
@@ -3898,8 +3897,10 @@ pub mod rpc_full {
         ) -> Result<String> {
             debug!("send_transaction rpc request received");
             let RpcSendTransactionConfig {
-                skip_preflight,
-                preflight_commitment,
+                // Preflight is always skipped on this node; the client-supplied
+                // `skip_preflight` / `preflight_commitment` values are ignored.
+                skip_preflight: _,
+                preflight_commitment: _,
                 encoding,
                 max_retries,
                 min_context_slot,
@@ -3913,13 +3914,8 @@ pub mod rpc_full {
             let (wire_transaction, unsanitized_tx) =
                 decode_and_deserialize::<VersionedTransaction>(data, binary_encoding)?;
 
-            let preflight_commitment = if skip_preflight {
-                Some(CommitmentConfig::processed())
-            } else {
-                preflight_commitment.map(|commitment| CommitmentConfig { commitment })
-            };
             let preflight_bank = &*meta.get_bank_with_config(RpcContextConfig {
-                commitment: preflight_commitment,
+                commitment: Some(CommitmentConfig::processed()),
                 min_context_slot,
             })?;
 
@@ -3939,7 +3935,7 @@ pub mod rpc_full {
             let durable_nonce_info = transaction
                 .get_durable_nonce()
                 .map(|&pubkey| (pubkey, blockhash));
-            if durable_nonce_info.is_some() || (skip_preflight && last_valid_block_height == 0) {
+            if durable_nonce_info.is_some() || last_valid_block_height == 0 {
                 // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
                 // It provides a fallback timeout for durable-nonce transaction retries in case of
                 // malicious packing of the retry queue. Durable-nonce transactions are otherwise
@@ -3948,78 +3944,25 @@ pub mod rpc_full {
                     preflight_bank.block_height() + preflight_bank.max_processing_age() as u64;
             }
 
-            if !skip_preflight {
-                let verification_error = transaction.verify().err();
-
-                if verification_error.is_none() && !meta.config.skip_preflight_health_check {
-                    match meta.health.check() {
-                        RpcHealthStatus::Ok => (),
-                        RpcHealthStatus::Unknown => {
-                            inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
-                            return Err(RpcCustomError::NodeUnhealthy {
-                                num_slots_behind: None,
-                            }
-                            .into());
+            // Preflight simulation is always skipped on this node. The health gate still
+            // applies so a stalled node does not accept new transactions.
+            if !meta.config.skip_preflight_health_check {
+                match meta.health.check() {
+                    RpcHealthStatus::Ok => (),
+                    RpcHealthStatus::Unknown => {
+                        inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
+                        return Err(RpcCustomError::NodeUnhealthy {
+                            num_slots_behind: None,
                         }
-                        RpcHealthStatus::Behind { num_slots } => {
-                            inc_new_counter_info!("rpc-send-tx_health-behind", 1);
-                            return Err(RpcCustomError::NodeUnhealthy {
-                                num_slots_behind: Some(num_slots),
-                            }
-                            .into());
-                        }
+                        .into());
                     }
-                }
-
-                let simulation_result = if let Some(err) = verification_error {
-                    TransactionSimulationResult::new_error(err)
-                } else {
-                    preflight_bank.simulate_transaction(&transaction, false)
-                };
-
-                if let TransactionSimulationResult {
-                    result: Err(err),
-                    logs,
-                    post_simulation_accounts: _,
-                    units_consumed,
-                    loaded_accounts_data_size,
-                    return_data,
-                    inner_instructions: _, // Always `None` due to `enable_cpi_recording = false`
-                    fee,
-                    pre_balances: _,
-                    post_balances: _,
-                    pre_token_balances: _,
-                    post_token_balances: _,
-                } = simulation_result
-                {
-                    match err {
-                        TransactionError::BlockhashNotFound => {
-                            inc_new_counter_info!("rpc-send-tx_err-blockhash-not-found", 1);
+                    RpcHealthStatus::Behind { num_slots } => {
+                        inc_new_counter_info!("rpc-send-tx_health-behind", 1);
+                        return Err(RpcCustomError::NodeUnhealthy {
+                            num_slots_behind: Some(num_slots),
                         }
-                        _ => {
-                            inc_new_counter_info!("rpc-send-tx_err-other", 1);
-                        }
+                        .into());
                     }
-                    return Err(RpcCustomError::SendTransactionPreflightFailure {
-                        message: format!("Transaction simulation failed: {err}"),
-                        result: RpcSimulateTransactionResult {
-                            err: Some(err.into()),
-                            logs: Some(logs),
-                            accounts: None,
-                            units_consumed: Some(units_consumed),
-                            loaded_accounts_data_size: Some(loaded_accounts_data_size),
-                            return_data: return_data.map(|return_data| return_data.into()),
-                            inner_instructions: None,
-                            replacement_blockhash: None,
-                            fee,
-                            pre_balances: None,
-                            post_balances: None,
-                            pre_token_balances: None,
-                            post_token_balances: None,
-                            loaded_addresses: None,
-                        },
-                    }
-                    .into());
                 }
             }
 
@@ -7089,8 +7032,8 @@ pub mod tests {
             "result": format!("{}", bad_transaction.signatures[0]),
             "id": 1,
         });
-        let expected: String = serde_json::to_string(&expected).unwrap();
-        assert_eq!(res, Some(expected));
+        let res: serde_json::Value = serde_json::from_str(&res.unwrap()).unwrap();
+        assert_eq!(res, expected);
 
         // sendTransaction will fail due to insanity
         bad_transaction.message.instructions[0].program_id_index = 0u8;
@@ -7129,44 +7072,15 @@ pub mod tests {
         );
         health.stub_set_health_status(Some(RpcHealthStatus::Ok));
 
-        // sendTransaction will fail due to invalid signature
+        // Preflight is always skipped on this node, so a bad signature is not rejected at
+        // RPC; clients are trusted to send well-formed transactions.
         bad_transaction.signatures[0] = Signature::default();
-
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
             bs58::encode(wincode::serialize(&bad_transaction).unwrap()).into_string()
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32002,
-                "data": {
-                    "accounts": null,
-                    "err": "SignatureFailure",
-                    "innerInstructions": null,
-                    "loadedAccountsDataSize": 0,
-                    "fee": null,
-                    "loadedAddresses": null,
-                    "preBalances": null,
-                    "postBalances": null,
-                    "preTokenBalances": null,
-                    "postTokenBalances": null,
-                    "logs": [],
-                    "replacementBlockhash": null,
-                    "returnData": null,
-                    "unitsConsumed": 0,
-                },
-                "message": "Transaction simulation failed: Transaction did not pass signature verification",
-            },
-            "id": 1,
-        });
-
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
+        assert!(res.unwrap().contains("\"result\""));
 
         // sendTransaction will now succeed because skipPreflight=true even though it's a bad
         // transaction

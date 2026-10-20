@@ -142,7 +142,7 @@ impl Default for Config {
         Self {
             retry_rate_ms: DEFAULT_RETRY_RATE_MS,
             leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
-            default_max_retries: None,
+            default_max_retries: Some(0),
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
@@ -629,7 +629,10 @@ mod test {
         let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
         let leader_forward_count = 1;
-        let config = Config::default();
+        let config = Config {
+            default_max_retries: None,
+            ..Config::default()
+        };
 
         let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().working_bank(),
@@ -914,7 +917,10 @@ mod test {
         genesis_config.fee_rate_governor = solana_fee_calculator::FeeRateGovernor::new(0, 0);
         let (_, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let leader_forward_count = 1;
-        let config = Config::default();
+        let config = Config {
+            default_max_retries: None,
+            ..Config::default()
+        };
 
         let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().working_bank(),

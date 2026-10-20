@@ -82,6 +82,8 @@ impl FromClapArgMatches for SendTransactionServiceConfig {
 
         let default_max_retries =
             value_t!(matches, "rpc_send_transaction_default_max_retries", usize).ok();
+        // Server-side default retries are off unless explicitly configured.
+        let default_max_retries = default_max_retries.or(Some(0));
 
         let service_max_retries =
             value_t!(matches, "rpc_send_transaction_service_max_retries", usize)?;

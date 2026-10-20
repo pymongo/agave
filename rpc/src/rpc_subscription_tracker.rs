@@ -436,6 +436,11 @@ impl LogsSubscriptionsIndex {
     }
 }
 
+/// Signature subscriptions are cleared roughly every 2000 slots (~5 minutes at
+/// 150 ms/slot). Blockhashes expire long before this, so a transaction that is
+/// still unconfirmed when its subscription is cleared cannot land anymore.
+const SIGNATURE_CLEAR_INTERVAL_SLOTS: u64 = 2000;
+
 pub struct SubscriptionsTracker {
     logs_subscriptions_index: LogsSubscriptionsIndex,
     by_signature: HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>>,
@@ -445,6 +450,8 @@ pub struct SubscriptionsTracker {
     gossip_watchers: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
     // Slots, slots updates, roots, votes.
     node_progress_watchers: HashMap<SubscriptionParams, Arc<SubscriptionInfo>>,
+    // Slot at which signature subscriptions were last cleared.
+    last_signature_clear_slot: Slot,
 }
 
 impl SubscriptionsTracker {
@@ -460,7 +467,38 @@ impl SubscriptionsTracker {
             commitment_watchers: HashMap::new(),
             gossip_watchers: HashMap::new(),
             node_progress_watchers: HashMap::new(),
+            last_signature_clear_slot: 0,
         }
+    }
+
+    /// Drops every signature subscription from the tracker, if at least
+    /// `SIGNATURE_CLEAR_INTERVAL_SLOTS` slots have passed since the last clear.
+    ///
+    /// Clients still hold their `SubscriptionToken`s; removing the tracker entries
+    /// stops the node from scanning or notifying them. Signatures that were never
+    /// seen (dropped or expired transactions) are the ones that accumulate, and
+    /// they are the only ones cleared in practice because blockhashes expire well
+    /// before this interval.
+    ///
+    /// Returns `true` if a clear happened.
+    pub fn maybe_clear_signature_subscriptions(&mut self, current_slot: Slot) -> bool {
+        if current_slot.saturating_sub(self.last_signature_clear_slot)
+            < SIGNATURE_CLEAR_INTERVAL_SLOTS
+        {
+            return false;
+        }
+        self.clear_signature_subscriptions();
+        self.last_signature_clear_slot = current_slot;
+        true
+    }
+
+    fn clear_signature_subscriptions(&mut self) {
+        for subs in self.by_signature.values() {
+            for id in subs.keys() {
+                self.commitment_watchers.remove(id);
+            }
+        }
+        self.by_signature.clear();
     }
 
     pub fn subscribe(
@@ -892,5 +930,41 @@ mod tests {
         assert_eq!(counts(&tracker), (1, 1, 0, 0));
         tracker.unsubscribe(signature_params, 3.into());
         assert_eq!(counts(&tracker), (0, 0, 0, 0));
+    }
+
+    #[test]
+    fn signature_subscriptions_cleared_on_interval() {
+        fn signature_count(tracker: &SubscriptionsTracker) -> usize {
+            tracker.by_signature.len()
+        }
+
+        let genesis_config = create_genesis_config(10_000).genesis_config;
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank_forks = BankForks::new_rw_arc(bank);
+        let mut tracker = SubscriptionsTracker::new(bank_forks);
+
+        let signature_params = SubscriptionParams::Signature(SignatureSubscriptionParams {
+            signature: Signature::default(),
+            commitment: CommitmentConfig::confirmed(),
+            enable_received_notification: false,
+        });
+        tracker.subscribe(signature_params.clone(), 1.into(), || 0);
+        assert_eq!(signature_count(&tracker), 1);
+
+        // Before the interval has elapsed, nothing is cleared.
+        assert!(!tracker.maybe_clear_signature_subscriptions(SIGNATURE_CLEAR_INTERVAL_SLOTS - 1));
+        assert_eq!(signature_count(&tracker), 1);
+
+        // At the interval, signature subscriptions are cleared from both indexes.
+        assert!(tracker.maybe_clear_signature_subscriptions(SIGNATURE_CLEAR_INTERVAL_SLOTS));
+        assert_eq!(signature_count(&tracker), 0);
+        assert_eq!(tracker.commitment_watchers.len(), 0);
+
+        // The next clear waits another full interval.
+        tracker.subscribe(signature_params, 2.into(), || 0);
+        assert!(!tracker.maybe_clear_signature_subscriptions(
+            SIGNATURE_CLEAR_INTERVAL_SLOTS + SIGNATURE_CLEAR_INTERVAL_SLOTS - 1
+        ));
+        assert_eq!(signature_count(&tracker), 1);
     }
 }

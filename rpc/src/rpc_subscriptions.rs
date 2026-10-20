@@ -837,6 +837,8 @@ impl RpcSubscriptions {
                         }
                         NotificationEntry::Bank(commitment_slots) => {
                             const SOURCE: &str = "bank";
+                            subscriptions
+                                .maybe_clear_signature_subscriptions(commitment_slots.slot);
                             let finalized_root_advanced = commitment_slots
                                 .highest_super_majority_root
                                 > last_finalized_root_scanned;

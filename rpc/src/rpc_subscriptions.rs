@@ -759,6 +759,9 @@ impl RpcSubscriptions {
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) {
         let mut stats = PubsubNotificationStats::default();
+        // Highest finalized root whose finalized signature subscriptions have been checked.
+        // Finalized signature subscriptions are only re-scanned when this advances.
+        let mut last_finalized_root_scanned: Slot = 0;
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -834,6 +837,9 @@ impl RpcSubscriptions {
                         }
                         NotificationEntry::Bank(commitment_slots) => {
                             const SOURCE: &str = "bank";
+                            let finalized_root_advanced = commitment_slots
+                                .highest_super_majority_root
+                                > last_finalized_root_scanned;
                             RpcSubscriptions::notify_watchers(
                                 max_complete_transaction_status_slot.clone(),
                                 subscriptions.commitment_watchers(),
@@ -842,7 +848,12 @@ impl RpcSubscriptions {
                                 &commitment_slots,
                                 &notifier,
                                 SOURCE,
+                                Some(finalized_root_advanced),
                             );
+                            if finalized_root_advanced {
+                                last_finalized_root_scanned =
+                                    commitment_slots.highest_super_majority_root;
+                            }
                         }
                         NotificationEntry::Gossip(slot) => {
                             let commitment_slots = CommitmentSlots {
@@ -858,6 +869,7 @@ impl RpcSubscriptions {
                                 &commitment_slots,
                                 &notifier,
                                 SOURCE,
+                                None,
                             );
                         }
                         NotificationEntry::SignaturesReceived((slot, slot_signatures)) => {
@@ -913,6 +925,9 @@ impl RpcSubscriptions {
         commitment_slots: &CommitmentSlots,
         notifier: &RpcNotifier,
         source: &'static str,
+        // `Some(true)` when the finalized root advanced since the last scan; `Some(false)` to
+        // skip finalized signature subscriptions; `None` to scan them unconditionally.
+        finalized_root_advanced: Option<bool>,
     ) {
         let mut total_time = Measure::start("notify_watchers");
 
@@ -1091,6 +1106,17 @@ impl RpcSubscriptions {
                     }
                 }
                 SubscriptionParams::Signature(params) => {
+                    // Finalized signatures only change state when the finalized root advances,
+                    // so skip them on other commitment updates.
+                    // A finalized subscription that has never been checked must still get its
+                    // first check: its signature may already be finalized when it subscribes.
+                    let is_finalized = subscription
+                        .commitment()
+                        .is_some_and(|commitment| commitment.is_finalized());
+                    let never_checked = *subscription.last_notified_slot.read().unwrap() == 0;
+                    if is_finalized && !never_checked && finalized_root_advanced == Some(false) {
+                        return;
+                    }
                     num_signatures_found.fetch_add(1, Ordering::Relaxed);
                     if let Some(slot) = slot {
                         let notified = check_commitment_and_notify(
